@@ -8,11 +8,11 @@ use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Foundation\Auth\User as Authenticatable;
 use Illuminate\Notifications\Notifiable;
 use Laravel\Sanctum\HasApiTokens;
+use Illuminate\Database\Eloquent\Relations\BelongsTo;
 
 #[Fillable([
     'id_rol',
-    'nombre',
-    'apellido',
+    'nombre_completo',
     'nombre_usuario',
     'correo',
     'contrasena',
@@ -54,6 +54,7 @@ class User extends Authenticatable
     {
         return [
             'contrasena' => 'hashed',
+            'es_administrador_principal' => 'boolean',
             'fecha_creacion' => 'datetime',
             'fecha_actualizacion' => 'datetime',
         ];
@@ -81,5 +82,13 @@ class User extends Authenticatable
     public function getAuthPassword(): string
     {
         return $this->contrasena;
+    }
+
+    /**
+     * Obtener el rol asociado al usuario.
+     */
+    public function rol(): BelongsTo
+    {
+        return $this->belongsTo(Rol::class, 'id_rol', 'id_rol');
     }
 }
