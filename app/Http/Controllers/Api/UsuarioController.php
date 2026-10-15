@@ -59,197 +59,186 @@ class UsuarioController extends Controller
 
 
     /**
-     * Actualizar el rol de un usuario.
+     * Actualizar los datos personales, el rol o el estado de un usuario.
+     * Solo modifica los campos enviados y autorizados.
      */
-    public function actualizarRol(Request $request, int $id): JsonResponse
+    public function actualizar(Request $request, int $id): JsonResponse
     {
-        // Buscar el usuario cuyo rol se desea modificar.
-        $usuario = User::find($id);
-
-        // Comprobar que el usuario exista.
-        if (!$usuario) {
-            return response()->json([
-                'message' => 'El usuario solicitado no existe.',
-            ], 404);
-        }
-
-        // Impedir que se modifique el rol del Administrador principal.
-        if ($usuario->es_administrador_principal) {
-            return response()->json([
-                'message' => 'No se puede modificar el rol del Administrador principal.',
-            ], 403);
-        }
-
-        // Impedir que un administrador cambie su propio rol.
-        if ($usuario->id_usuario === $request->user()->id_usuario) {
-            return response()->json([
-                'message' => 'No puedes modificar tu propio rol.',
-            ], 403);
-        }
-
-        //Validar el rol recibido.
-        $datosValidados = $request->validate([
-            'id_rol' => ['required', 'integer', 'exists:roles,id_rol'],
-        ]);
-
-        // Obtener el administrador que realiza la petición.
-        $administrador = $request->user();
-
-        // Comprobar si intenta asignar el rol Administrador.
-        if ($datosValidados['id_rol'] === 1) {
-
-            // Permitirlo únicamente al Administrador principal.
-            if (!$administrador->es_administrador_principal) {
-                return response()->json([
-                    'message' => 'Solo el Administrador principal puede asignar el rol Administrador.',
-                ], 403);
-            }
-        }
-
-        // Buscar el rol solicitado.
-        $rol = Rol::find($datosValidados['id_rol']);
-
-        // Comprobar que el rol esté activo.
-        if (!$rol || $rol->estado !== 'Activo') {
-            return response()->json([
-                'message' => 'El rol seleccionado no está disponible.',
-            ], 422);
-        }
-
-        // Asignar el nuevo rol al usuario.
-        $usuario->id_rol = $rol->id_rol;
-        $usuario->save();
-
-        return response()->json([
-            'message' => 'Rol actualizado correctamente.',
-            'datos' => [
-                'id_usuario' => $usuario->id_usuario,
-                'nombre_completo' => $usuario->nombre_completo,
-                'id_rol' => $usuario->id_rol,
-                'nombre_rol' => $rol->nombre_rol,
-            ],
-        ], 200);
-    }
-
-    /**
-     * Actualizar el estado de un usuario.
-     */
-    public function actualizarEstado(Request $request, int $id): JsonResponse
-    {
-        // Obtener al usuario que realiza la petición.
-        $administrador = $request->user();
-
-        // Permitir esta operación únicamente al Administrador principal.
-        if (!$administrador->es_administrador_principal) {
-            return response()->json([
-                'message' => 'Solo el Administrador principal puede cambiar el estado de los usuarios.',
-            ], 403);
-        }
-
-        // Buscar al usuario cuyo estado se desea cambiar.
-        $usuario = User::find($id);
-
-        if (!$usuario) {
-            return response()->json([
-                'message' => 'El usuario solicitado no existe.',
-            ], 404);
-        }
-
-        // Evitar que el Administrador principal desactive su propia cuenta.
-        if (
-            $usuario->id_usuario === $administrador->id_usuario
-        ) {
-            return response()->json([
-                'message' => 'No puedes cambiar el estado de tu propia cuenta.',
-            ], 403);
-        }
-
-        // Validar el estado solicitado.
-        $datosValidados = $request->validate([
-            'estado' => ['required', 'in:Activo,Inactivo'],
-        ]);
-
-        // Guardar el nuevo estado.
-        $usuario->estado = $datosValidados['estado'];
-        $usuario->save();
-
-        return response()->json([
-            'message' => 'Estado del usuario actualizado correctamente.',
-            'datos' => [
-                'id_usuario' => $usuario->id_usuario,
-                'nombre_completo' => $usuario->nombre_completo,
-                'estado' => $usuario->estado,
-            ],
-        ], 200);
-    }
-
-    /**
-     * Actualizar los datos personales de un usuario.
-     */
-    public function actualizarDatos(Request $request, int $id): JsonResponse
-    {
-        // Obtener al administrador que realiza la petición.
+        // Obtener al administrador que realiza la solicitud.
         $administrador = $request->user();
 
         // Buscar al usuario que se desea modificar.
         $usuario = User::find($id);
 
-        // Comprobar que el usuario exista.
         if (!$usuario) {
             return response()->json([
                 'message' => 'El usuario solicitado no existe.',
             ], 404);
         }
 
-        // Impedir la modificación de la cuenta del Administrador principal.
+        // Proteger la cuenta del Administrador principal.
         if ($usuario->es_administrador_principal) {
             return response()->json([
-                'message' => 'No se pueden modificar los datos del Administrador principal.',
+                'message' => 'No se puede modificar la cuenta del Administrador principal.',
             ], 403);
         }
 
-        // Impedir que un administrador modifique su propia cuenta por esta ruta.
-        if ($usuario->id_usuario === $administrador->id_usuario) {
-            return response()->json([
-                'message' => 'No puedes modificar tus propios datos desde esta operación.',
-            ], 403);
-        }
-
-        // Validar los datos recibidos.
+        // Validar únicamente los campos que se pueden actualizar.
         $datosValidados = $request->validate([
             'nombre_completo' => [
+                'sometimes',
                 'required',
                 'string',
                 'max:200',
             ],
             'nombre_usuario' => [
+                'sometimes',
                 'required',
                 'string',
                 'max:80',
                 'unique:usuarios,nombre_usuario,' . $usuario->id_usuario . ',id_usuario',
             ],
             'correo' => [
+                'sometimes',
                 'required',
+                'string',
                 'email',
                 'max:150',
                 'unique:usuarios,correo,' . $usuario->id_usuario . ',id_usuario',
             ],
+            'id_rol' => [
+                'sometimes',
+                'required',
+                'integer',
+                'exists:roles,id_rol',
+            ],
+            'estado' => [
+                'sometimes',
+                'required',
+                'in:Activo,Inactivo',
+            ],
+        ], [
+            'nombre_completo.required' => 'El nombre completo es obligatorio.',
+            'nombre_completo.string' => 'El nombre completo debe ser un texto válido.',
+            'nombre_completo.max' => 'El nombre completo no debe superar los 200 caracteres.',
+
+            'nombre_usuario.required' => 'El nombre de usuario es obligatorio.',
+            'nombre_usuario.string' => 'El nombre de usuario debe ser un texto válido.',
+            'nombre_usuario.max' => 'El nombre de usuario no debe superar los 80 caracteres.',
+            'nombre_usuario.unique' => 'Este nombre de usuario ya está registrado.',
+
+            'correo.required' => 'El correo electrónico es obligatorio.',
+            'correo.string' => 'El correo electrónico debe ser un texto válido.',
+            'correo.email' => 'Ingresa un correo electrónico válido.',
+            'correo.max' => 'El correo electrónico no debe superar los 150 caracteres.',
+            'correo.unique' => 'Este correo electrónico ya está registrado.',
+
+            'id_rol.required' => 'Debes seleccionar un rol.',
+            'id_rol.integer' => 'El identificador del rol debe ser válido.',
+            'id_rol.exists' => 'El rol seleccionado no existe.',
+
+            'estado.required' => 'Debes seleccionar un estado.',
+            'estado.in' => 'El estado debe ser Activo o Inactivo.',
         ]);
 
-        // Actualizar únicamente los datos personales permitidos.
-        $usuario->nombre_completo = $datosValidados['nombre_completo'];
-        $usuario->nombre_usuario = $datosValidados['nombre_usuario'];
-        $usuario->correo = $datosValidados['correo'];
+        // Rechazar solicitudes sin campos que puedan actualizarse.
+        if (empty($datosValidados)) {
+            return response()->json([
+                'message' => 'Debes enviar al menos un campo válido para actualizar.',
+            ], 422);
+        }
 
-        $usuario->save();
+        // Identificar los campos personales y el rol.
+        $modificaDatosORol =
+            array_key_exists('nombre_completo', $datosValidados) ||
+            array_key_exists('nombre_usuario', $datosValidados) ||
+            array_key_exists('correo', $datosValidados) ||
+            array_key_exists('id_rol', $datosValidados);
+
+        // Impedir que un administrador modifique sus propios datos o rol.
+        if (
+            $modificaDatosORol &&
+            (int) $usuario->id_usuario === (int) $administrador->id_usuario
+        ) {
+            return response()->json([
+                'message' => 'No puedes modificar tus propios datos o rol mediante esta operación.',
+            ], 403);
+        }
+
+        // Solo el Administrador principal puede cambiar estados.
+        if (array_key_exists('estado', $datosValidados)) {
+            if (!$administrador->es_administrador_principal) {
+                return response()->json([
+                    'message' => 'Solo el Administrador principal puede cambiar el estado de los usuarios.',
+                ], 403);
+            }
+
+            // Impedir que el Administrador principal cambie su propio estado.
+            if (
+                (int) $usuario->id_usuario === (int) $administrador->id_usuario
+            ) {
+                return response()->json([
+                    'message' => 'No puedes cambiar el estado de tu propia cuenta.',
+                ], 403);
+            }
+        }
+
+        // Comprobar si se intenta asignar el rol Administrador.
+        if (
+            array_key_exists('id_rol', $datosValidados) &&
+            (int) $datosValidados['id_rol'] === 1 &&
+            !$administrador->es_administrador_principal
+        ) {
+            return response()->json([
+                'message' => 'Solo el Administrador principal puede asignar el rol Administrador.',
+            ], 403);
+        }
+
+        // Verificar que el nuevo rol esté activo, si se envió.
+        $rol = null;
+
+        if (array_key_exists('id_rol', $datosValidados)) {
+            $rol = Rol::find($datosValidados['id_rol']);
+
+            if (!$rol || $rol->estado !== 'Activo') {
+                return response()->json([
+                    'message' => 'El rol seleccionado no está disponible.',
+                ], 422);
+            }
+        }
+
+        // Aplicar los cambios juntos, después de validar los permisos.
+        DB::transaction(function () use ($usuario, $datosValidados) {
+            foreach (
+                [
+                    'nombre_completo',
+                    'nombre_usuario',
+                    'correo',
+                    'id_rol',
+                    'estado',
+                ] as $campo
+            ) {
+                if (array_key_exists($campo, $datosValidados)) {
+                    $usuario->{$campo} = $datosValidados[$campo];
+                }
+            }
+
+            $usuario->save();
+        });
+
+        // Devolver los datos actualizados sin exponer la contraseña.
+        $usuario->load('rol');
 
         return response()->json([
-            'message' => 'Datos del usuario actualizados correctamente.',
+            'message' => 'Usuario actualizado correctamente.',
             'datos' => [
                 'id_usuario' => $usuario->id_usuario,
                 'nombre_completo' => $usuario->nombre_completo,
                 'nombre_usuario' => $usuario->nombre_usuario,
                 'correo' => $usuario->correo,
+                'id_rol' => $usuario->id_rol,
+                'nombre_rol' => $usuario->rol?->nombre_rol,
+                'estado' => $usuario->estado,
             ],
         ], 200);
     }
@@ -309,7 +298,7 @@ class UsuarioController extends Controller
         });
 
         return response()->json([
-            'message' => 'Contraseña actualizada correctamente. El usuario debe iniciar sesión nuevamente.',
+            'message' => 'Contraseña actualizada correctamente',
         ], 200);
     }
 }

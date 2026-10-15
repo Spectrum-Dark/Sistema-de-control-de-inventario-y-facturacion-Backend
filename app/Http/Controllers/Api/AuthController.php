@@ -83,6 +83,25 @@ class AuthController extends Controller
     }
 
     /**
+     * Cerrar la sesión del usuario autenticado.
+     */
+    public function cerrarSesion(Request $request): JsonResponse
+    {
+        // Obtener el token utilizado en la solicitud actual.
+        $token = $request->user()->currentAccessToken();
+
+        // Revocar el token actual para cerrar la sesión.
+        if ($token) {
+            $token->delete();
+        }
+
+        // Confirmar que la sesión se cerró correctamente.
+        return response()->json([
+            'message' => 'Sesión cerrada correctamente.',
+        ], 200);
+    }
+
+    /**
      * Registrar un nuevo usuario con el rol Consultor.
      */
     public function registrar(Request $request): JsonResponse
