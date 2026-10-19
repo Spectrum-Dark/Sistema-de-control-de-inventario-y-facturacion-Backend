@@ -8,6 +8,7 @@ use Illuminate\Http\JsonResponse;
 use App\Models\User;
 use App\Models\Rol;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Validator;
 
 class UsuarioController extends Controller
 {
@@ -27,8 +28,10 @@ class UsuarioController extends Controller
             'correo' => $usuario->correo,
             'id_rol' => $usuario->id_rol,
             'estado' => $usuario->estado,
+            'es_administrador_principal' => (bool) $usuario->es_administrador_principal,
         ], 200);
     }
+
 
     /**
      * Obtener la lista de usuarios registrados.
@@ -44,11 +47,18 @@ class UsuarioController extends Controller
                 'nombre_usuario',
                 'correo',
                 'estado',
+                'es_administrador_principal',
                 'fecha_creacion',
                 'fecha_actualizacion',
             ])
             ->orderBy('id_usuario')
             ->get();
+
+        // Convertir el campo a booleano.
+        $usuarios->each(function ($usuario) {
+            $usuario->es_administrador_principal =
+                (bool) $usuario->es_administrador_principal;
+        });
 
         // Devolver los resultados en formato JSON.
         return response()->json([
@@ -84,62 +94,76 @@ class UsuarioController extends Controller
         }
 
         // Validar únicamente los campos que se pueden actualizar.
-        $datosValidados = $request->validate([
-            'nombre_completo' => [
-                'sometimes',
-                'required',
-                'string',
-                'max:200',
+        $validador = Validator::make(
+            $request->all(),
+            [
+                'nombre_completo' => [
+                    'sometimes',
+                    'required',
+                    'string',
+                    'max:200',
+                ],
+                'nombre_usuario' => [
+                    'sometimes',
+                    'required',
+                    'string',
+                    'max:80',
+                    'unique:usuarios,nombre_usuario,' . $usuario->id_usuario . ',id_usuario',
+                ],
+                'correo' => [
+                    'sometimes',
+                    'required',
+                    'string',
+                    'email',
+                    'max:150',
+                    'unique:usuarios,correo,' . $usuario->id_usuario . ',id_usuario',
+                ],
+                'id_rol' => [
+                    'sometimes',
+                    'required',
+                    'integer',
+                    'exists:roles,id_rol',
+                ],
+                'estado' => [
+                    'sometimes',
+                    'required',
+                    'in:Activo,Inactivo',
+                ],
             ],
-            'nombre_usuario' => [
-                'sometimes',
-                'required',
-                'string',
-                'max:80',
-                'unique:usuarios,nombre_usuario,' . $usuario->id_usuario . ',id_usuario',
-            ],
-            'correo' => [
-                'sometimes',
-                'required',
-                'string',
-                'email',
-                'max:150',
-                'unique:usuarios,correo,' . $usuario->id_usuario . ',id_usuario',
-            ],
-            'id_rol' => [
-                'sometimes',
-                'required',
-                'integer',
-                'exists:roles,id_rol',
-            ],
-            'estado' => [
-                'sometimes',
-                'required',
-                'in:Activo,Inactivo',
-            ],
-        ], [
-            'nombre_completo.required' => 'El nombre completo es obligatorio.',
-            'nombre_completo.string' => 'El nombre completo debe ser un texto válido.',
-            'nombre_completo.max' => 'El nombre completo no debe superar los 200 caracteres.',
+            [
+                'nombre_completo.required' => 'El nombre completo es obligatorio.',
+                'nombre_completo.string' => 'El nombre completo debe ser un texto válido.',
+                'nombre_completo.max' => 'El nombre completo no debe superar los 200 caracteres.',
 
-            'nombre_usuario.required' => 'El nombre de usuario es obligatorio.',
-            'nombre_usuario.string' => 'El nombre de usuario debe ser un texto válido.',
-            'nombre_usuario.max' => 'El nombre de usuario no debe superar los 80 caracteres.',
-            'nombre_usuario.unique' => 'Este nombre de usuario ya está registrado.',
+                'nombre_usuario.required' => 'El nombre de usuario es obligatorio.',
+                'nombre_usuario.string' => 'El nombre de usuario debe ser un texto válido.',
+                'nombre_usuario.max' => 'El nombre de usuario no debe superar los 80 caracteres.',
+                'nombre_usuario.unique' => 'Este nombre de usuario ya está registrado.',
 
-            'correo.required' => 'El correo electrónico es obligatorio.',
-            'correo.string' => 'El correo electrónico debe ser un texto válido.',
-            'correo.email' => 'Ingresa un correo electrónico válido.',
-            'correo.max' => 'El correo electrónico no debe superar los 150 caracteres.',
-            'correo.unique' => 'Este correo electrónico ya está registrado.',
+                'correo.required' => 'El correo electrónico es obligatorio.',
+                'correo.string' => 'El correo electrónico debe ser un texto válido.',
+                'correo.email' => 'Ingresa un correo electrónico válido.',
+                'correo.max' => 'El correo electrónico no debe superar los 150 caracteres.',
+                'correo.unique' => 'Este correo electrónico ya está registrado.',
 
-            'id_rol.required' => 'Debes seleccionar un rol.',
-            'id_rol.integer' => 'El identificador del rol debe ser válido.',
-            'id_rol.exists' => 'El rol seleccionado no existe.',
+                'id_rol.required' => 'Debes seleccionar un rol.',
+                'id_rol.integer' => 'El identificador del rol debe ser válido.',
+                'id_rol.exists' => 'El rol seleccionado no existe.',
 
-            'estado.required' => 'Debes seleccionar un estado.',
-            'estado.in' => 'El estado debe ser Activo o Inactivo.',
-        ]);
+                'estado.required' => 'Debes seleccionar un estado.',
+                'estado.in' => 'El estado debe ser Activo o Inactivo.',
+            ]
+        );
+
+        // Devolver únicamente el primer mensaje si hay errores.
+        if ($validador->fails()) {
+            return response()->json([
+                'message' => $validador->errors()->first(),
+            ], 422);
+        }
+
+        // Obtener los datos que superaron la validación.
+        $datosValidados = $validador->validated();
 
         // Rechazar solicitudes sin campos que puedan actualizarse.
         if (empty($datosValidados)) {
@@ -269,25 +293,49 @@ class UsuarioController extends Controller
         }
 
         // Impedir que se cambie la contraseña de la propia cuenta.
-        if ($usuario->id_usuario === $administrador->id_usuario) {
+        if (
+            (int) $usuario->id_usuario === (int) $administrador->id_usuario
+        ) {
             return response()->json([
                 'message' => 'No puedes cambiar tu propia contraseña desde esta operación.',
             ], 403);
         }
 
         // Validar la nueva contraseña.
-        $datosValidados = $request->validate([
-            'contrasena' => [
-                'required',
-                'string',
-                'min:8',
-                'confirmed',
+        $validador = Validator::make(
+            $request->all(),
+            [
+                'contrasena' => [
+                    'required',
+                    'string',
+                    'min:8',
+                    'confirmed',
+                ],
+                'contrasena_confirmation' => [
+                    'required',
+                    'string',
+                ],
             ],
-            'contrasena_confirmation' => [
-                'required',
-                'string',
-            ],
-        ]);
+            [
+                'contrasena.required' => 'La nueva contraseña es obligatoria.',
+                'contrasena.string' => 'La contraseña debe ser válida.',
+                'contrasena.min' => 'La contraseña debe tener al menos 8 caracteres.',
+                'contrasena.confirmed' => 'Las contraseñas no coinciden.',
+
+                'contrasena_confirmation.required' => 'Debes confirmar la nueva contraseña.',
+                'contrasena_confirmation.string' => 'La confirmación de la contraseña debe ser válida.',
+            ]
+        );
+
+        // Devolver únicamente el primer mensaje si hay errores.
+        if ($validador->fails()) {
+            return response()->json([
+                'message' => $validador->errors()->first(),
+            ], 422);
+        }
+
+        // Obtener los datos que superaron la validación.
+        $datosValidados = $validador->validated();
 
         // Actualizar la contraseña y revocar los tokens anteriores.
         DB::transaction(function () use ($usuario, $datosValidados) {

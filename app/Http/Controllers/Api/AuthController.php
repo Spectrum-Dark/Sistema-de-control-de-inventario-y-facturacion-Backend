@@ -8,7 +8,7 @@ use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Hash;
-use Illuminate\Validation\ValidationException;
+use Illuminate\Support\Facades\Validator;
 
 class AuthController extends Controller
 {
@@ -18,7 +18,8 @@ class AuthController extends Controller
     public function iniciarSesion(Request $request): JsonResponse
     {
         // Validar los datos recibidos desde el frontend.
-        $datos = $request->validate(
+        $validador = Validator::make(
+            $request->all(),
             [
                 'identificador' => [
                     'required',
@@ -39,6 +40,16 @@ class AuthController extends Controller
             ]
         );
 
+        // Devolver únicamente el primer mensaje si hay errores.
+        if ($validador->fails()) {
+            return response()->json([
+                'message' => $validador->errors()->first(),
+            ], 422);
+        }
+
+        // Obtener los datos que superaron la validación.
+        $datos = $validador->validated();
+
         // Buscar al usuario por correo electrónico o nombre de usuario.
         $usuario = User::where('correo', $datos['identificador'])
             ->orWhere('nombre_usuario', $datos['identificador'])
@@ -49,11 +60,9 @@ class AuthController extends Controller
             !$usuario ||
             !Hash::check($datos['contrasena'], $usuario->contrasena)
         ) {
-            throw ValidationException::withMessages([
-                'identificador' => [
-                    'El correo electrónico, nombre de usuario o contraseña son incorrectos.',
-                ],
-            ]);
+            return response()->json([
+                'message' => 'El correo electrónico, nombre de usuario o contraseña son incorrectos.',
+            ], 422);
         }
 
         // Impedir el acceso a cuentas inactivas.
@@ -78,6 +87,7 @@ class AuthController extends Controller
                 'correo' => $usuario->correo,
                 'id_rol' => $usuario->id_rol,
                 'estado' => $usuario->estado,
+                'es_administrador_principal' => (bool) $usuario->es_administrador_principal,
             ],
         ], 200);
     }
@@ -107,7 +117,8 @@ class AuthController extends Controller
     public function registrar(Request $request): JsonResponse
     {
         // Validar los datos enviados desde el formulario.
-        $datos = $request->validate(
+        $validador = Validator::make(
+            $request->all(),
             [
                 'nombre_completo' => [
                     'required',
@@ -161,15 +172,18 @@ class AuthController extends Controller
 
                 'confirmar_contrasena.required' => 'Debes confirmar tu contraseña.',
                 'confirmar_contrasena.string' => 'La confirmación de la contraseña debe ser válida.',
-            ],
-            [
-                'nombre_completo' => 'nombre completo',
-                'nombre_usuario' => 'nombre de usuario',
-                'correo' => 'correo electrónico',
-                'contrasena' => 'contraseña',
-                'confirmar_contrasena' => 'confirmación de la contraseña',
             ]
         );
+
+        // Devolver únicamente el primer mensaje si hay errores.
+        if ($validador->fails()) {
+            return response()->json([
+                'message' => $validador->errors()->first(),
+            ], 422);
+        }
+
+        // Obtener los datos que superaron la validación.
+        $datos = $validador->validated();
 
         // Buscar el identificador del rol Consultor.
         $idRol = DB::table('roles')
