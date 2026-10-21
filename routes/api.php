@@ -10,6 +10,9 @@ use App\Http\Controllers\Api\ModeloVehiculoController;
 use App\Http\Controllers\Api\ProveedorController;
 use App\Http\Controllers\Api\ProductoController;
 use App\Http\Controllers\Api\CompatibilidadProductoController;
+use App\Http\Controllers\Api\ClienteController;
+use App\Http\Controllers\Api\CompraController;
+use App\Http\Controllers\Api\HistorialCompraController;
 
 
 /*
@@ -187,3 +190,71 @@ Route::put('/compatibilidades/actualizar/{id}', [CompatibilidadProductoControlle
 // Eliminar una compatibilidad existente.
 Route::delete('/compatibilidades/eliminar/{id}', [CompatibilidadProductoController::class, 'eliminar'])
     ->middleware(['auth:sanctum', 'estado.usuario', 'rol:Administrador']);
+
+
+
+/*
+|--------------------------------------------------------------------------
+| 8. Clientes
+|--------------------------------------------------------------------------
+*/
+
+// Consultar los clientes registrados.
+Route::get('/clientes/listar', [ClienteController::class, 'listar'])
+    ->middleware(['auth:sanctum', 'estado.usuario', 'rol:Administrador,Operador,Consultor']);
+
+// Registrar un nuevo cliente.
+Route::post('/clientes/registrar', [ClienteController::class, 'registrar'])
+    ->middleware(['auth:sanctum', 'estado.usuario', 'rol:Administrador,Operador']);
+
+// Actualizar los datos de un cliente existente.
+Route::put('/clientes/actualizar/{id}', [ClienteController::class, 'actualizar'])
+    ->middleware(['auth:sanctum', 'estado.usuario', 'rol:Administrador']);
+
+// Eliminar un cliente existente.
+Route::delete('/clientes/eliminar/{id}', [ClienteController::class, 'eliminar'])
+    ->middleware(['auth:sanctum', 'estado.usuario', 'rol:Administrador']);
+
+
+
+/*
+|--------------------------------------------------------------------------
+| 9. Compras
+|----------------------------------------------------------------------------
+*/
+
+// Consultar las compras registradas.
+Route::get('/compras/listar', [CompraController::class, 'listar'])
+    ->middleware(['auth:sanctum', 'estado.usuario', 'rol:Administrador,Operador,Consultor']);
+
+// Registrar una compra.
+Route::post('/compras/registrar', [CompraController::class, 'registrar'])
+    ->middleware(['auth:sanctum', 'estado.usuario', 'rol:Administrador,Operador']);
+
+// Confirmar una compra y actualizar el inventario.
+Route::post('/compras/confirmar/{id}', [CompraController::class, 'confirmar'])
+    ->middleware(['auth:sanctum', 'estado.usuario', 'rol:Administrador,Operador']);
+
+// Corregir una compra confirmada y ajustar inventario.
+Route::put('/compras/corregir/{id}', [CompraController::class, 'corregir'])
+    ->middleware(['auth:sanctum', 'estado.usuario', 'rol:Administrador,Operador']);
+
+
+
+/*
+|--------------------------------------------------------------------------
+| 9.1. Historial de compras
+|--------------------------------------------------------------------------
+*/
+
+// Consultar todo el historial de correcciones de compras.
+Route::get('/compras/historial/listar', [HistorialCompraController::class, 'listar'])
+    ->middleware(['auth:sanctum', 'estado.usuario', 'rol:Administrador,Operador,Consultor']);
+
+// Consultar un registro de historial específico por su ID.
+Route::get('/compras/historial/mostrar/{id}', [HistorialCompraController::class, 'mostrar'])
+    ->middleware(['auth:sanctum', 'estado.usuario', 'rol:Administrador,Operador,Consultor']);
+
+// Consultar el historial de correcciones de una compra específica.
+Route::get('/compras/historial/cambios/{id}', [HistorialCompraController::class, 'porCompra'])
+    ->middleware(['auth:sanctum', 'estado.usuario', 'rol:Administrador,Operador,Consultor']);
