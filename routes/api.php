@@ -18,6 +18,7 @@ use App\Http\Controllers\Api\VentaController;
 use App\Http\Controllers\Api\HistorialVentaController;
 use App\Http\Controllers\Api\FacturaController;
 use App\Http\Controllers\Api\ReporteController;
+use App\Http\Controllers\Api\RespaldoController;
 
 /*
 |--------------------------------------------------------------------------
@@ -368,3 +369,19 @@ Route::post('/reportes/productos/mas-vendidos', [ReporteController::class, 'prod
 
 Route::post('/reportes/financiero', [ReporteController::class, 'financieroConsolidado'])
     ->middleware(['auth:sanctum', 'estado.usuario', 'rol:Administrador,Operador,Consultor']);
+
+
+
+/*
+|--------------------------------------------------------------------------
+| 16. Respaldo y Restauración de la Base de Datos
+|--------------------------------------------------------------------------
+*/
+
+// Generar y descargar una copia de respaldo SQL.
+Route::get('/respaldo/descargar', [RespaldoController::class, 'generarRespaldo',])
+    ->middleware(['auth:sanctum', 'estado.usuario', 'rol:Administrador',]);
+
+// Restaurar la base de datos desde un archivo SQL.
+Route::post('/respaldo/restaurar', [RespaldoController::class, 'restaurarRespaldo',])
+    ->middleware(['auth:sanctum', 'estado.usuario', 'rol:Administrador',]);
