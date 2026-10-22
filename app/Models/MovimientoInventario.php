@@ -63,4 +63,10 @@ class MovimientoInventario extends Model
             'id_usuario'
         );
     }
+
+    // Relaciona el movimiento con la venta que lo originó.
+    public function venta()
+    {
+        return $this->belongsTo(Venta::class, 'id_venta', 'id_venta');
+    }
 }

@@ -13,7 +13,11 @@ use App\Http\Controllers\Api\CompatibilidadProductoController;
 use App\Http\Controllers\Api\ClienteController;
 use App\Http\Controllers\Api\CompraController;
 use App\Http\Controllers\Api\HistorialCompraController;
-
+use App\Http\Controllers\Api\MovimientoInventarioController;
+use App\Http\Controllers\Api\VentaController;
+use App\Http\Controllers\Api\HistorialVentaController;
+use App\Http\Controllers\Api\FacturaController;
+use App\Http\Controllers\Api\ReporteController;
 
 /*
 |--------------------------------------------------------------------------
@@ -243,7 +247,7 @@ Route::put('/compras/corregir/{id}', [CompraController::class, 'corregir'])
 
 /*
 |--------------------------------------------------------------------------
-| 9.1. Historial de compras
+| 10. Historial de compras
 |--------------------------------------------------------------------------
 */
 
@@ -251,10 +255,116 @@ Route::put('/compras/corregir/{id}', [CompraController::class, 'corregir'])
 Route::get('/compras/historial/listar', [HistorialCompraController::class, 'listar'])
     ->middleware(['auth:sanctum', 'estado.usuario', 'rol:Administrador,Operador,Consultor']);
 
-// Consultar un registro de historial específico por su ID.
-Route::get('/compras/historial/mostrar/{id}', [HistorialCompraController::class, 'mostrar'])
+
+
+/*
+|--------------------------------------------------------------------------
+| 11. Movimientos de inventario 
+|--------------------------------------------------------------------------
+*/
+
+// Consultar todos los movimientos de inventario.
+Route::get('/inventario/movimientos/listar', [MovimientoInventarioController::class, 'listar'])
     ->middleware(['auth:sanctum', 'estado.usuario', 'rol:Administrador,Operador,Consultor']);
 
-// Consultar el historial de correcciones de una compra específica.
-Route::get('/compras/historial/cambios/{id}', [HistorialCompraController::class, 'porCompra'])
+
+
+/*
+|--------------------------------------------------------------------------
+| 12. Ventas
+|--------------------------------------------------------------------------
+*/
+
+// Consultar las ventas registradas.
+Route::get('/ventas/listar', [VentaController::class, 'listar'])
+    ->middleware(['auth:sanctum', 'estado.usuario', 'rol:Administrador,Operador,Consultor']);
+
+// Registrar una venta.
+Route::post('/ventas/registrar', [VentaController::class, 'registrar'])
+    ->middleware(['auth:sanctum', 'estado.usuario', 'rol:Administrador,Operador']);
+
+// Confirmar una venta.
+Route::post('/ventas/confirmar/{id}', [VentaController::class, 'confirmar'])
+    ->middleware(['auth:sanctum', 'estado.usuario', 'rol:Administrador,Operador']);
+
+// Corregir una venta confirmada.
+Route::put('/ventas/corregir/{id}', [VentaController::class, 'corregir'])
+    ->middleware(['auth:sanctum', 'estado.usuario', 'rol:Administrador,Operador']);
+
+// Anular una venta.
+Route::put('/ventas/anular/{id}', [VentaController::class, 'anular'])
+    ->middleware(['auth:sanctum', 'estado.usuario', 'rol:Administrador,Operador']);
+
+
+
+/*
+|--------------------------------------------------------------------------
+| 13. Historial de ventas
+|--------------------------------------------------------------------------
+*/
+
+// Consultar todo el historial de ventas.
+Route::get('/ventas/historial/listar', [HistorialVentaController::class, 'listar'])
+    ->middleware(['auth:sanctum', 'estado.usuario', 'rol:Administrador,Operador,Consultor']);
+
+
+
+/*
+|--------------------------------------------------------------------------
+| 14. Facturación
+|--------------------------------------------------------------------------
+*/
+
+// Consultar las facturas emitidas.
+Route::get('/facturas/listar', [FacturaController::class, 'listar'])
+    ->middleware(['auth:sanctum', 'estado.usuario', 'rol:Administrador,Operador,Consultor']);
+
+// Consultar una factura específica por su ID.
+Route::get('/facturas/mostrar/{id}', [FacturaController::class, 'mostrar'])
+    ->middleware(['auth:sanctum', 'estado.usuario', 'rol:Administrador,Operador,Consultor']);
+
+// Emitir una factura a partir de una venta confirmada.
+Route::post('/facturas/emitir', [FacturaController::class, 'emitir'])
+    ->middleware(['auth:sanctum', 'estado.usuario', 'rol:Administrador,Operador']);
+
+// Anular una factura emitida.
+Route::put('/facturas/anular/{id}', [FacturaController::class, 'anular'])
+    ->middleware(['auth:sanctum', 'estado.usuario', 'rol:Administrador,Operador']);
+
+
+
+/*
+|--------------------------------------------------------------------------
+| 15. Reportes y Consultas Consolidadas
+|--------------------------------------------------------------------------
+*/
+
+Route::get('/reportes/inventario/actual', [ReporteController::class, 'inventarioActual'])
+    ->middleware(['auth:sanctum', 'estado.usuario', 'rol:Administrador,Operador,Consultor']);
+
+Route::get('/reportes/inventario/stock-bajo', [ReporteController::class, 'inventarioBajo'])
+    ->middleware(['auth:sanctum', 'estado.usuario', 'rol:Administrador,Operador,Consultor']);
+
+Route::post('/reportes/inventario/movimientos', [ReporteController::class, 'movimientosInventario'])
+    ->middleware(['auth:sanctum', 'estado.usuario', 'rol:Administrador,Operador,Consultor']);
+
+Route::post('/reportes/compras', [ReporteController::class, 'compras'])
+    ->middleware(['auth:sanctum', 'estado.usuario', 'rol:Administrador,Operador,Consultor']);
+
+Route::post('/reportes/ventas', [ReporteController::class, 'ventas'])
+    ->middleware(['auth:sanctum', 'estado.usuario', 'rol:Administrador,Operador,Consultor']);
+
+Route::post('/reportes/facturacion', [ReporteController::class, 'facturacion'])
+    ->middleware(['auth:sanctum', 'estado.usuario', 'rol:Administrador,Operador,Consultor']);
+
+Route::get('/reportes/clientes', [ReporteController::class, 'clientes'])
+    ->middleware(['auth:sanctum', 'estado.usuario', 'rol:Administrador,Operador,Consultor']);
+
+Route::get('/reportes/proveedores', [ReporteController::class, 'proveedores'])
+    ->middleware(['auth:sanctum', 'estado.usuario', 'rol:Administrador,Operador,Consultor']);
+
+Route::post('/reportes/productos/mas-vendidos', [ReporteController::class, 'productosMasVendidos'])
+    ->middleware(['auth:sanctum', 'estado.usuario', 'rol:Administrador,Operador,Consultor']);
+
+Route::post('/reportes/financiero', [ReporteController::class, 'financieroConsolidado'])
     ->middleware(['auth:sanctum', 'estado.usuario', 'rol:Administrador,Operador,Consultor']);

@@ -59,12 +59,6 @@ class CompraController extends Controller
                     'required',
                     'date',
                 ],
-                'impuesto' => [
-                    'sometimes',
-                    'required',
-                    'numeric',
-                    'min:0',
-                ],
                 'observaciones' => [
                     'nullable',
                     'string',
@@ -97,8 +91,6 @@ class CompraController extends Controller
                 'numero_compra.required' => 'El número de compra es obligatorio.',
                 'numero_compra.unique' => 'Ya existe una compra con ese número.',
                 'fecha_compra.date' => 'La fecha de compra no es válida.',
-                'impuesto.numeric' => 'El impuesto debe ser un importe numérico.',
-                'impuesto.min' => 'El impuesto no puede ser negativo.',
                 'detalles.required' => 'Debe agregar al menos un producto a la compra.',
                 'detalles.min' => 'La compra debe contener al menos un producto.',
                 'detalles.*.id_producto.required' => 'Cada detalle debe indicar un producto.',
@@ -137,8 +129,11 @@ class CompraController extends Controller
             $subtotalCompra += $subtotalDetalle;
         }
 
+        // Calcula automáticamente el IVA del 15 %.
         $subtotalCompra = round($subtotalCompra, 2);
-        $impuesto = round((float) ($datos['impuesto'] ?? 0), 2);
+        $impuesto = round($subtotalCompra * 0.15, 2);
+
+        // Calcula el total de la compra.
         $totalCompra = round($subtotalCompra + $impuesto, 2);
 
         $compra = DB::transaction(function () use (
@@ -341,12 +336,6 @@ class CompraController extends Controller
                     'nullable',
                     'string',
                 ],
-                'impuesto' => [
-                    'sometimes',
-                    'required',
-                    'numeric',
-                    'min:0',
-                ],
                 'detalles' => [
                     'sometimes',
                     'required',
@@ -375,7 +364,6 @@ class CompraController extends Controller
                 'motivo.min' => 'El motivo debe contener al menos 5 caracteres.',
                 'id_proveedor.exists' => 'El proveedor seleccionado no existe.',
                 'fecha_compra.date' => 'La fecha de compra no es válida.',
-                'impuesto.min' => 'El impuesto no puede ser negativo.',
                 'detalles.min' => 'La compra debe contener al menos un producto.',
                 'detalles.*.id_producto.distinct' => 'No puede repetir un producto en la misma compra.',
                 'detalles.*.id_producto.exists' => 'Uno de los productos seleccionados no existe.',
@@ -494,11 +482,10 @@ class CompraController extends Controller
 
             $subtotalCompra = round($subtotalCompra, 2);
 
-            $impuesto = round(
-                (float) ($datos['impuesto'] ?? $compra->impuesto),
-                2
-            );
+            // Recalcula el IVA según el nuevo subtotal.
+            $impuesto = round($subtotalCompra * 0.15, 2);
 
+            // Recalcula el total de la compra.
             $totalCompra = round($subtotalCompra + $impuesto, 2);
 
             $datosNuevos = [
@@ -570,11 +557,9 @@ class CompraController extends Controller
                     $existenciaNueva = $existenciaAnterior + $diferencia;
 
                     if ($existenciaNueva < 0) {
-                        return [
-                            'error' => true,
-                            'codigo' => 422,
-                            'message' => "El ajuste dejaría stock negativo para el producto ID: {$idProducto}.",
-                        ];
+                        throw \Illuminate\Validation\ValidationException::withMessages([
+                            'detalles' => 'La corrección dejaría el inventario con existencias negativas.',
+                        ]);
                     }
 
                     $producto->existencia = $existenciaNueva;
