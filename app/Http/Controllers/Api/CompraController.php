@@ -5,14 +5,16 @@ namespace App\Http\Controllers\Api;
 use App\Http\Controllers\Controller;
 use App\Models\Compra;
 use App\Models\DetalleCompra;
+use App\Models\HistorialCompra;
+use App\Models\MovimientoInventario;
+use App\Models\Producto;
+use App\Models\Proveedor;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Validator;
 use Illuminate\Validation\Rule;
-use App\Models\MovimientoInventario;
-use App\Models\Producto;
-use App\Models\HistorialCompra;
+use Illuminate\Validation\ValidationException;
 
 class CompraController extends Controller
 {
@@ -32,6 +34,43 @@ class CompraController extends Controller
         return response()->json([
             'message' => 'Compras consultadas correctamente.',
             'datos' => $compras,
+        ], 200);
+    }
+
+    /**
+     * Lista los productos vinculados al proveedor indicado.
+     */
+    public function listarProductosPorProveedor(int $id): JsonResponse
+    {
+        $proveedor = Proveedor::find($id);
+
+        if (! $proveedor) {
+            return response()->json([
+                'message' => 'El proveedor solicitado no existe.',
+            ], 404);
+        }
+
+        $productos = Producto::query()
+            ->whereHas('proveedores', function ($consulta) use ($id) {
+                $consulta->where('proveedores.id_proveedor', $id);
+            })
+            ->with([
+                'categoria:id_categoria,nombre_categoria',
+                'proveedores' => function ($consulta) use ($id) {
+                    $consulta->where('proveedores.id_proveedor', $id)
+                        ->select('proveedores.id_proveedor', 'nombre_proveedor');
+                },
+            ])
+            ->orderBy('nombre_producto')
+            ->get();
+
+        return response()->json([
+            'message' => 'Productos del proveedor consultados correctamente.',
+            'proveedor' => [
+                'id_proveedor' => $proveedor->id_proveedor,
+                'nombre_proveedor' => $proveedor->nombre_proveedor,
+            ],
+            'datos' => $productos,
         ], 200);
     }
 
@@ -112,7 +151,7 @@ class CompraController extends Controller
         $datos = $validador->validated();
         $usuario = $request->user();
 
-        if (!$usuario) {
+        if (! $usuario) {
             return response()->json([
                 'message' => 'Debe iniciar sesión para registrar una compra.',
             ], 401);
@@ -200,7 +239,7 @@ class CompraController extends Controller
     {
         $compraExiste = Compra::where('id_compra', $id)->exists();
 
-        if (!$compraExiste) {
+        if (! $compraExiste) {
             return response()->json([
                 'message' => 'La compra solicitada no existe.',
             ], 404);
@@ -208,7 +247,7 @@ class CompraController extends Controller
 
         $usuario = request()->user();
 
-        if (!$usuario) {
+        if (! $usuario) {
             return response()->json([
                 'message' => 'Debe iniciar sesión para confirmar una compra.',
             ], 401);
@@ -219,7 +258,7 @@ class CompraController extends Controller
                 ->lockForUpdate()
                 ->first();
 
-            if (!$compra) {
+            if (! $compra) {
                 return [
                     'error' => true,
                     'message' => 'La compra solicitada no existe.',
@@ -252,7 +291,7 @@ class CompraController extends Controller
                     ->lockForUpdate()
                     ->first();
 
-                if (!$producto) {
+                if (! $producto) {
                     throw new \RuntimeException(
                         'No se encontró uno de los productos de la compra.'
                     );
@@ -274,7 +313,7 @@ class CompraController extends Controller
                     'existencia_anterior' => $existenciaAnterior,
                     'existencia_nueva' => $existenciaNueva,
                     'motivo' => 'Entrada por confirmación de compra '
-                        . $compra->numero_compra,
+                        .$compra->numero_compra,
                 ]);
             }
 
@@ -381,7 +420,7 @@ class CompraController extends Controller
         $datos = $validador->validated();
         $usuario = $request->user();
 
-        if (!$usuario) {
+        if (! $usuario) {
             return response()->json([
                 'message' => 'Debe iniciar sesión para corregir una compra.',
             ], 401);
@@ -396,7 +435,7 @@ class CompraController extends Controller
                 ->lockForUpdate()
                 ->first();
 
-            if (!$compra) {
+            if (! $compra) {
                 return [
                     'error' => true,
                     'codigo' => 404,
@@ -542,7 +581,7 @@ class CompraController extends Controller
                     ->lockForUpdate()
                     ->first();
 
-                if (!$producto) {
+                if (! $producto) {
                     throw new \RuntimeException(
                         'No se encontró uno de los productos para ajustar el inventario.'
                     );
@@ -557,7 +596,7 @@ class CompraController extends Controller
                     $existenciaNueva = $existenciaAnterior + $diferencia;
 
                     if ($existenciaNueva < 0) {
-                        throw \Illuminate\Validation\ValidationException::withMessages([
+                        throw ValidationException::withMessages([
                             'detalles' => 'La corrección dejaría el inventario con existencias negativas.',
                         ]);
                     }
@@ -573,7 +612,7 @@ class CompraController extends Controller
                         'cantidad' => abs($diferencia),
                         'existencia_anterior' => $existenciaAnterior,
                         'existencia_nueva' => $existenciaNueva,
-                        'motivo' => 'Ajuste por corrección de compra ' . $compra->numero_compra . ': ' . $datos['motivo'],
+                        'motivo' => 'Ajuste por corrección de compra '.$compra->numero_compra.': '.$datos['motivo'],
                     ]);
                 }
             }

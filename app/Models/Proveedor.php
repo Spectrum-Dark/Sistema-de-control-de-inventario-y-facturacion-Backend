@@ -26,4 +26,20 @@ class Proveedor extends Model
         'direccion',
         'estado',
     ];
+
+    // Relación muchos a muchos con los productos asociados al proveedor.
+    public function productos()
+    {
+        return $this->belongsToMany(
+            Producto::class,
+            'productos_proveedores',
+            'id_proveedor',
+            'id_producto'
+        )->withPivot(
+            'codigo_proveedor',
+            'costo_referencia',
+            'observaciones',
+            'fecha_creacion'
+        );
+    }
 }

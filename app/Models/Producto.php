@@ -36,4 +36,21 @@ class Producto extends Model
     {
         return $this->belongsTo(Categoria::class, 'id_categoria', 'id_categoria');
     }
+
+    // Relación muchos a muchos con los proveedores del producto.
+    // La tabla pivote no tiene updated_at; su única fecha es fecha_creacion (default en BD).
+    public function proveedores()
+    {
+        return $this->belongsToMany(
+            Proveedor::class,
+            'productos_proveedores',
+            'id_producto',
+            'id_proveedor'
+        )->withPivot(
+            'codigo_proveedor',
+            'costo_referencia',
+            'observaciones',
+            'fecha_creacion'
+        );
+    }
 }

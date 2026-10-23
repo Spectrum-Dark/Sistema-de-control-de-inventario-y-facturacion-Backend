@@ -8,6 +8,7 @@ use Illuminate\Http\JsonResponse;
 use App\Models\User;
 use App\Models\Rol;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Hash;
 use Illuminate\Support\Facades\Validator;
 
 class UsuarioController extends Controller
@@ -32,6 +33,135 @@ class UsuarioController extends Controller
         ], 200);
     }
 
+    /**
+     * Actualizar los datos personales del usuario autenticado.
+     */
+    public function actualizarPerfil(Request $request): JsonResponse
+    {
+        $usuario = $request->user();
+
+        $validador = Validator::make(
+            $request->all(),
+            [
+                'nombre_completo' => ['sometimes', 'required', 'string', 'max:200'],
+                'nombre_usuario' => [
+                    'sometimes',
+                    'required',
+                    'string',
+                    'max:80',
+                    'unique:usuarios,nombre_usuario,'.$usuario->id_usuario.',id_usuario',
+                ],
+                'correo' => [
+                    'sometimes',
+                    'required',
+                    'string',
+                    'email',
+                    'max:150',
+                    'unique:usuarios,correo,'.$usuario->id_usuario.',id_usuario',
+                ],
+            ],
+            [
+                'nombre_completo.required' => 'El nombre completo es obligatorio.',
+                'nombre_completo.string' => 'El nombre completo debe ser un texto válido.',
+                'nombre_completo.max' => 'El nombre completo no debe superar los 200 caracteres.',
+                'nombre_usuario.required' => 'El nombre de usuario es obligatorio.',
+                'nombre_usuario.string' => 'El nombre de usuario debe ser un texto válido.',
+                'nombre_usuario.max' => 'El nombre de usuario no debe superar los 80 caracteres.',
+                'nombre_usuario.unique' => 'Este nombre de usuario ya está registrado.',
+                'correo.required' => 'El correo electrónico es obligatorio.',
+                'correo.string' => 'El correo electrónico debe ser un texto válido.',
+                'correo.email' => 'Ingresa un correo electrónico válido.',
+                'correo.max' => 'El correo electrónico no debe superar los 150 caracteres.',
+                'correo.unique' => 'Este correo electrónico ya está registrado.',
+            ],
+        );
+
+        if ($validador->fails()) {
+            return response()->json([
+                'message' => $validador->errors()->first(),
+            ], 422);
+        }
+
+        $datosValidados = $validador->validated();
+
+        if (empty($datosValidados)) {
+            return response()->json([
+                'message' => 'Debes enviar al menos un campo válido para actualizar.',
+            ], 422);
+        }
+
+        DB::transaction(function () use ($usuario, $datosValidados) {
+            foreach (['nombre_completo', 'nombre_usuario', 'correo'] as $campo) {
+                if (array_key_exists($campo, $datosValidados)) {
+                    $usuario->{$campo} = $datosValidados[$campo];
+                }
+            }
+
+            $usuario->save();
+        });
+
+        return response()->json([
+            'message' => 'Perfil actualizado correctamente.',
+            'datos' => [
+                'id_usuario' => $usuario->id_usuario,
+                'nombre_completo' => $usuario->nombre_completo,
+                'nombre_usuario' => $usuario->nombre_usuario,
+                'correo' => $usuario->correo,
+                'id_rol' => $usuario->id_rol,
+                'estado' => $usuario->estado,
+                'es_administrador_principal' => (bool) $usuario->es_administrador_principal,
+            ],
+        ], 200);
+    }
+
+    /**
+     * Cambiar la contraseña del usuario autenticado y revocar sus sesiones anteriores.
+     */
+    public function cambiarContrasenaPropia(Request $request): JsonResponse
+    {
+        $usuario = $request->user();
+
+        $validador = Validator::make(
+            $request->all(),
+            [
+                'contrasena_actual' => ['required', 'string'],
+                'contrasena' => ['required', 'string', 'min:8', 'confirmed'],
+                'contrasena_confirmation' => ['required', 'string'],
+            ],
+            [
+                'contrasena_actual.required' => 'La contraseña actual es obligatoria.',
+                'contrasena.required' => 'La nueva contraseña es obligatoria.',
+                'contrasena.string' => 'La contraseña debe ser válida.',
+                'contrasena.min' => 'La contraseña debe tener al menos 8 caracteres.',
+                'contrasena.confirmed' => 'Las contraseñas no coinciden.',
+                'contrasena_confirmation.required' => 'Debes confirmar la nueva contraseña.',
+            ],
+        );
+
+        if ($validador->fails()) {
+            return response()->json([
+                'message' => $validador->errors()->first(),
+            ], 422);
+        }
+
+        $datosValidados = $validador->validated();
+
+        if (! Hash::check($datosValidados['contrasena_actual'], $usuario->contrasena)) {
+            return response()->json([
+                'message' => 'La contraseña actual no es correcta.',
+            ], 422);
+        }
+
+        DB::transaction(function () use ($usuario, $datosValidados) {
+            $usuario->contrasena = $datosValidados['contrasena'];
+            $usuario->save();
+            $usuario->tokens()->delete();
+        });
+
+        return response()->json([
+            'message' => 'Contraseña actualizada correctamente. Inicia sesión nuevamente.',
+        ], 200);
+    }
 
     /**
      * Obtener la lista de usuarios registrados.

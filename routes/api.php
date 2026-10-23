@@ -1,24 +1,23 @@
 <?php
 
-use Illuminate\Support\Facades\Route;
-
 use App\Http\Controllers\Api\AuthController;
-use App\Http\Controllers\Api\UsuarioController;
 use App\Http\Controllers\Api\CategoriaController;
+use App\Http\Controllers\Api\ClienteController;
+use App\Http\Controllers\Api\CompatibilidadProductoController;
+use App\Http\Controllers\Api\CompraController;
+use App\Http\Controllers\Api\FacturaController;
+use App\Http\Controllers\Api\HistorialCompraController;
+use App\Http\Controllers\Api\HistorialVentaController;
 use App\Http\Controllers\Api\MarcaVehiculoController;
 use App\Http\Controllers\Api\ModeloVehiculoController;
-use App\Http\Controllers\Api\ProveedorController;
-use App\Http\Controllers\Api\ProductoController;
-use App\Http\Controllers\Api\CompatibilidadProductoController;
-use App\Http\Controllers\Api\ClienteController;
-use App\Http\Controllers\Api\CompraController;
-use App\Http\Controllers\Api\HistorialCompraController;
 use App\Http\Controllers\Api\MovimientoInventarioController;
-use App\Http\Controllers\Api\VentaController;
-use App\Http\Controllers\Api\HistorialVentaController;
-use App\Http\Controllers\Api\FacturaController;
+use App\Http\Controllers\Api\ProductoController;
+use App\Http\Controllers\Api\ProveedorController;
 use App\Http\Controllers\Api\ReporteController;
 use App\Http\Controllers\Api\RespaldoController;
+use App\Http\Controllers\Api\UsuarioController;
+use App\Http\Controllers\Api\VentaController;
+use Illuminate\Support\Facades\Route;
 
 /*
 |--------------------------------------------------------------------------
@@ -40,6 +39,14 @@ Route::post('/cerrar-sesion', [AuthController::class, 'cerrarSesion'])
 Route::get('/usuario', [UsuarioController::class, 'obtenerAutenticado'])
     ->middleware(['auth:sanctum', 'estado.usuario']);
 
+// Actualizar los datos personales del Administrador autenticado.
+Route::put('/perfil', [UsuarioController::class, 'actualizarPerfil'])
+    ->middleware(['auth:sanctum', 'estado.usuario', 'rol:Administrador']);
+
+// Cambiar la contraseña del Administrador autenticado.
+Route::put('/perfil/contrasena', [UsuarioController::class, 'cambiarContrasenaPropia'])
+    ->middleware(['auth:sanctum', 'estado.usuario', 'rol:Administrador']);
+
 // Consultar los usuarios registrados.
 Route::get('/usuarios', [UsuarioController::class, 'listar'])
     ->middleware(['auth:sanctum', 'estado.usuario', 'rol:Administrador']);
@@ -51,8 +58,6 @@ Route::put('/usuarios/actualizar/{id}', [UsuarioController::class, 'actualizar']
 // Restablecer la contraseña de un usuario.
 Route::put('/usuarios/actualizar/acceso/{id}', [UsuarioController::class, 'actualizarContrasena'])
     ->middleware(['auth:sanctum', 'estado.usuario', 'rol:Administrador']);
-
-
 
 /*
 |--------------------------------------------------------------------------
@@ -76,8 +81,6 @@ Route::put('/categorias/actualizar/{id}', [CategoriaController::class, 'actualiz
 Route::delete('/categorias/eliminar/{id}', [CategoriaController::class, 'eliminar'])
     ->middleware(['auth:sanctum', 'estado.usuario', 'rol:Administrador']);
 
-
-
 /*
 |--------------------------------------------------------------------------
 | 3. Marcas de vehículos
@@ -99,8 +102,6 @@ Route::put('/marcas/actualizar/{id}', [MarcaVehiculoController::class, 'actualiz
 // Eliminar una marca existente.
 Route::delete('/marcas/eliminar/{id}', [MarcaVehiculoController::class, 'eliminar'])
     ->middleware(['auth:sanctum', 'estado.usuario', 'rol:Administrador']);
-
-
 
 /*
 |--------------------------------------------------------------------------
@@ -124,8 +125,6 @@ Route::put('/proveedores/actualizar/{id}', [ProveedorController::class, 'actuali
 Route::delete('/proveedores/eliminar/{id}', [ProveedorController::class, 'eliminar'])
     ->middleware(['auth:sanctum', 'estado.usuario', 'rol:Administrador']);
 
-
-
 /*
 |--------------------------------------------------------------------------
 | 5. Modelos de vehículos
@@ -147,8 +146,6 @@ Route::put('/modelos/actualizar/{id}', [ModeloVehiculoController::class, 'actual
 // Eliminar un modelo existente.
 Route::delete('/modelos/eliminar/{id}', [ModeloVehiculoController::class, 'eliminar'])
     ->middleware(['auth:sanctum', 'estado.usuario', 'rol:Administrador']);
-
-
 
 /*
 |--------------------------------------------------------------------------
@@ -172,8 +169,6 @@ Route::put('/productos/actualizar/{id}', [ProductoController::class, 'actualizar
 Route::delete('/productos/eliminar/{id}', [ProductoController::class, 'eliminar'])
     ->middleware(['auth:sanctum', 'estado.usuario', 'rol:Administrador']);
 
-
-
 /*
 |--------------------------------------------------------------------------
 | 7. Compatibilidades de productos
@@ -195,8 +190,6 @@ Route::put('/compatibilidades/actualizar/{id}', [CompatibilidadProductoControlle
 // Eliminar una compatibilidad existente.
 Route::delete('/compatibilidades/eliminar/{id}', [CompatibilidadProductoController::class, 'eliminar'])
     ->middleware(['auth:sanctum', 'estado.usuario', 'rol:Administrador']);
-
-
 
 /*
 |--------------------------------------------------------------------------
@@ -220,8 +213,6 @@ Route::put('/clientes/actualizar/{id}', [ClienteController::class, 'actualizar']
 Route::delete('/clientes/eliminar/{id}', [ClienteController::class, 'eliminar'])
     ->middleware(['auth:sanctum', 'estado.usuario', 'rol:Administrador']);
 
-
-
 /*
 |--------------------------------------------------------------------------
 | 9. Compras
@@ -230,6 +221,10 @@ Route::delete('/clientes/eliminar/{id}', [ClienteController::class, 'eliminar'])
 
 // Consultar las compras registradas.
 Route::get('/compras/listar', [CompraController::class, 'listar'])
+    ->middleware(['auth:sanctum', 'estado.usuario', 'rol:Administrador,Operador,Consultor']);
+
+// Consultar los productos vinculados a un proveedor.
+Route::get('/compras/proveedores/{id}/productos', [CompraController::class, 'listarProductosPorProveedor'])
     ->middleware(['auth:sanctum', 'estado.usuario', 'rol:Administrador,Operador,Consultor']);
 
 // Registrar una compra.
@@ -244,8 +239,6 @@ Route::post('/compras/confirmar/{id}', [CompraController::class, 'confirmar'])
 Route::put('/compras/corregir/{id}', [CompraController::class, 'corregir'])
     ->middleware(['auth:sanctum', 'estado.usuario', 'rol:Administrador,Operador']);
 
-
-
 /*
 |--------------------------------------------------------------------------
 | 10. Historial de compras
@@ -256,19 +249,15 @@ Route::put('/compras/corregir/{id}', [CompraController::class, 'corregir'])
 Route::get('/compras/historial/listar', [HistorialCompraController::class, 'listar'])
     ->middleware(['auth:sanctum', 'estado.usuario', 'rol:Administrador,Operador,Consultor']);
 
-
-
 /*
 |--------------------------------------------------------------------------
-| 11. Movimientos de inventario 
+| 11. Movimientos de inventario
 |--------------------------------------------------------------------------
 */
 
 // Consultar todos los movimientos de inventario.
 Route::get('/inventario/movimientos/listar', [MovimientoInventarioController::class, 'listar'])
     ->middleware(['auth:sanctum', 'estado.usuario', 'rol:Administrador,Operador,Consultor']);
-
-
 
 /*
 |--------------------------------------------------------------------------
@@ -296,8 +285,6 @@ Route::put('/ventas/corregir/{id}', [VentaController::class, 'corregir'])
 Route::put('/ventas/anular/{id}', [VentaController::class, 'anular'])
     ->middleware(['auth:sanctum', 'estado.usuario', 'rol:Administrador,Operador']);
 
-
-
 /*
 |--------------------------------------------------------------------------
 | 13. Historial de ventas
@@ -307,8 +294,6 @@ Route::put('/ventas/anular/{id}', [VentaController::class, 'anular'])
 // Consultar todo el historial de ventas.
 Route::get('/ventas/historial/listar', [HistorialVentaController::class, 'listar'])
     ->middleware(['auth:sanctum', 'estado.usuario', 'rol:Administrador,Operador,Consultor']);
-
-
 
 /*
 |--------------------------------------------------------------------------
@@ -331,8 +316,6 @@ Route::post('/facturas/emitir', [FacturaController::class, 'emitir'])
 // Anular una factura emitida.
 Route::put('/facturas/anular/{id}', [FacturaController::class, 'anular'])
     ->middleware(['auth:sanctum', 'estado.usuario', 'rol:Administrador,Operador']);
-
-
 
 /*
 |--------------------------------------------------------------------------
@@ -370,8 +353,6 @@ Route::post('/reportes/productos/mas-vendidos', [ReporteController::class, 'prod
 Route::post('/reportes/financiero', [ReporteController::class, 'financieroConsolidado'])
     ->middleware(['auth:sanctum', 'estado.usuario', 'rol:Administrador,Operador,Consultor']);
 
-
-
 /*
 |--------------------------------------------------------------------------
 | 16. Respaldo y Restauración de la Base de Datos
@@ -379,9 +360,9 @@ Route::post('/reportes/financiero', [ReporteController::class, 'financieroConsol
 */
 
 // Generar y descargar una copia de respaldo SQL.
-Route::get('/respaldo/descargar', [RespaldoController::class, 'generarRespaldo',])
-    ->middleware(['auth:sanctum', 'estado.usuario', 'rol:Administrador',]);
+Route::get('/respaldo/descargar', [RespaldoController::class, 'generarRespaldo'])
+    ->middleware(['auth:sanctum', 'estado.usuario', 'rol:Administrador']);
 
 // Restaurar la base de datos desde un archivo SQL.
-Route::post('/respaldo/restaurar', [RespaldoController::class, 'restaurarRespaldo',])
-    ->middleware(['auth:sanctum', 'estado.usuario', 'rol:Administrador',]);
+Route::post('/respaldo/restaurar', [RespaldoController::class, 'restaurarRespaldo'])
+    ->middleware(['auth:sanctum', 'estado.usuario', 'rol:Administrador']);
