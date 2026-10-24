@@ -19,7 +19,11 @@ use Illuminate\Validation\ValidationException;
 class CompraController extends Controller
 {
     /**
-     * Lista las compras con sus proveedores, usuarios y detalles.
+     * MÉTODO: listar()
+     * ¿Qué hace?: Trae todas las compras de la base de datos de la más nueva a la más vieja.
+     * Truco pro (Eager Loading): Con el 'with' traemos de un solo golpe al proveedor,
+     * al usuario y los productos del detalle. Así evitamos hacer cientos de consultas
+     * a la BD por cada compra (problema N+1).
      */
     public function listar(): JsonResponse
     {
@@ -38,7 +42,9 @@ class CompraController extends Controller
     }
 
     /**
-     * Lista los productos vinculados al proveedor indicado.
+     * MÉTODO: listarProductosPorProveedor()
+     * ¿Qué hace?: Busca un proveedor por su ID y, si existe, te devuelve un listado
+     * con todos los productos que vende ese proveedor en específico ordenados alfabéticamente.
      */
     public function listarProductosPorProveedor(int $id): JsonResponse
     {
@@ -75,54 +81,26 @@ class CompraController extends Controller
     }
 
     /**
-     * Registra una compra y sus detalles sin modificar el inventario.
+     * MÉTODO: registrar()
+     * ¿Qué hace?: Da de alta una nueva compra. Valida que todo venga correcto,
+     * calcula subtotales, aplica el impuesto (15% de IVA), y guarda la cabecera
+     * junto con sus productos (detalles).
+     * OJO: Aquí todavía NO se toca el inventario, solo se registra el documento.
      */
     public function registrar(Request $request): JsonResponse
     {
+        // 1. Validamos que los datos cumplan con las reglas (que existan en la BD, no estén repetidos, etc.)
         $validador = Validator::make(
             $request->all(),
             [
-                'id_proveedor' => [
-                    'required',
-                    'integer',
-                    Rule::exists('proveedores', 'id_proveedor'),
-                ],
-                'numero_compra' => [
-                    'required',
-                    'string',
-                    'max:50',
-                    Rule::unique('compras', 'numero_compra'),
-                ],
-                'fecha_compra' => [
-                    'sometimes',
-                    'required',
-                    'date',
-                ],
-                'observaciones' => [
-                    'nullable',
-                    'string',
-                ],
-                'detalles' => [
-                    'required',
-                    'array',
-                    'min:1',
-                ],
-                'detalles.*.id_producto' => [
-                    'required',
-                    'integer',
-                    'distinct',
-                    Rule::exists('productos', 'id_producto'),
-                ],
-                'detalles.*.cantidad' => [
-                    'required',
-                    'integer',
-                    'min:1',
-                ],
-                'detalles.*.precio_unitario' => [
-                    'required',
-                    'numeric',
-                    'min:0',
-                ],
+                'id_proveedor' => ['required', 'integer', Rule::exists('proveedores', 'id_proveedor')],
+                'numero_compra' => ['required', 'string', 'max:50', Rule::unique('compras', 'numero_compra')],
+                'fecha_compra' => ['sometimes', 'required', 'date'],
+                'observaciones' => ['nullable', 'string'],
+                'detalles' => ['required', 'array', 'min:1'],
+                'detalles.*.id_producto' => ['required', 'integer', 'distinct', Rule::exists('productos', 'id_producto')],
+                'detalles.*.cantidad' => ['required', 'integer', 'min:1'],
+                'detalles.*.precio_unitario' => ['required', 'numeric', 'min:0'],
             ],
             [
                 'id_proveedor.required' => 'Debe seleccionar un proveedor.',
@@ -157,6 +135,7 @@ class CompraController extends Controller
             ], 401);
         }
 
+        // 2. Recorremos los productos para calcular el subtotal global de la compra
         $subtotalCompra = 0;
 
         foreach ($datos['detalles'] as $detalle) {
@@ -168,13 +147,13 @@ class CompraController extends Controller
             $subtotalCompra += $subtotalDetalle;
         }
 
-        // Calcula automáticamente el IVA del 15 %.
+        // 3. Calculamos impuestos (15%) y total general
         $subtotalCompra = round($subtotalCompra, 2);
         $impuesto = round($subtotalCompra * 0.15, 2);
-
-        // Calcula el total de la compra.
         $totalCompra = round($subtotalCompra + $impuesto, 2);
 
+        // 4. Usamos una Transacción (DB::transaction): si algo falla a mitad de la inserción,
+        // la base de datos se echa para atrás (rollback) para no dejar datos a medias.
         $compra = DB::transaction(function () use (
             $datos,
             $usuario,
@@ -197,8 +176,10 @@ class CompraController extends Controller
                 $datosCompra['fecha_compra'] = $datos['fecha_compra'];
             }
 
+            // Creamos la compra principal (la cabecera)
             $compra = Compra::create($datosCompra);
 
+            // Creamos cada uno de los detalles vinculados a esta compra
             foreach ($datos['detalles'] as $detalle) {
                 $subtotalDetalle = round(
                     $detalle['cantidad'] * $detalle['precio_unitario'],
@@ -233,7 +214,10 @@ class CompraController extends Controller
     }
 
     /**
-     * Confirma una compra y registra las entradas al inventario.
+     * MÉTODO: confirmar()
+     * ¿Qué hace?: Toma una compra que estaba en estado 'Registrada' y la pasa a 'Confirmada'.
+     * Aquí es donde **sí se actualiza el inventario**: le suma la cantidad comprada al stock
+     * actual de cada producto y genera un registro de movimiento en la tabla `movimientos_inventarios`.
      */
     public function confirmar(int $id): JsonResponse
     {
@@ -254,6 +238,8 @@ class CompraController extends Controller
         }
 
         $resultado = DB::transaction(function () use ($id, $usuario) {
+            // lockForUpdate() bloquea temporalmente la fila en la BD
+            // para evitar que dos usuarios intenten confirmar lo mismo al mismo tiempo (condición de carrera).
             $compra = Compra::where('id_compra', $id)
                 ->lockForUpdate()
                 ->first();
@@ -283,7 +269,9 @@ class CompraController extends Controller
                 ];
             }
 
+            // Recorremos los productos para sumarles stock
             foreach ($detalles as $detalle) {
+                // Bloqueamos también el producto para que su stock no sea modificado por otra venta/compra en paralelo
                 $producto = Producto::where(
                     'id_producto',
                     $detalle->id_producto
@@ -301,9 +289,11 @@ class CompraController extends Controller
                 $cantidad = (int) $detalle->cantidad;
                 $existenciaNueva = $existenciaAnterior + $cantidad;
 
+                // Guardamos el nuevo stock en el producto
                 $producto->existencia = $existenciaNueva;
                 $producto->save();
 
+                // Dejamos constancia de este movimiento en el historial de inventario
                 MovimientoInventario::create([
                     'id_producto' => $producto->id_producto,
                     'id_usuario' => $usuario->id_usuario,
@@ -317,6 +307,7 @@ class CompraController extends Controller
                 ]);
             }
 
+            // Cambiamos el estado de la compra a Confirmada
             $compra->estado = 'Confirmada';
             $compra->save();
 
@@ -345,58 +336,27 @@ class CompraController extends Controller
     }
 
     /**
-     * Corrige una compra confirmada, conserva el historial
-     * y ajusta las existencias según las diferencias.
+     * MÉTODO: corregir()
+     * ¿Qué hace?: Es el método más pesado y completo. Permite modificar una compra que
+     * YA FUE CONFIRMADA. Hace lo siguiente:
+     * 1. Guarda una foto de cómo estaba antes la compra en la tabla de historial (`historial_compras`).
+     * 2. Calcula la diferencia (el "delta") entre la cantidad vieja y la nueva de cada producto.
+     * 3. Ajusta el inventario sumando o restando esa diferencia con mucho cuidado (validando que no quede stock negativo).
+     * 4. Actualiza los totales y los nuevos detalles de la compra.
      */
     public function corregir(Request $request, int $id): JsonResponse
     {
         $validador = Validator::make(
             $request->all(),
             [
-                'motivo' => [
-                    'required',
-                    'string',
-                    'min:5',
-                    'max:2000',
-                ],
-                'id_proveedor' => [
-                    'sometimes',
-                    'required',
-                    'integer',
-                    Rule::exists('proveedores', 'id_proveedor'),
-                ],
-                'fecha_compra' => [
-                    'sometimes',
-                    'required',
-                    'date',
-                ],
-                'observaciones' => [
-                    'sometimes',
-                    'nullable',
-                    'string',
-                ],
-                'detalles' => [
-                    'sometimes',
-                    'required',
-                    'array',
-                    'min:1',
-                ],
-                'detalles.*.id_producto' => [
-                    'required_with:detalles',
-                    'integer',
-                    'distinct',
-                    Rule::exists('productos', 'id_producto'),
-                ],
-                'detalles.*.cantidad' => [
-                    'required_with:detalles',
-                    'integer',
-                    'min:1',
-                ],
-                'detalles.*.precio_unitario' => [
-                    'required_with:detalles',
-                    'numeric',
-                    'min:0',
-                ],
+                'motivo' => ['required', 'string', 'min:5', 'max:2000'],
+                'id_proveedor' => ['sometimes', 'required', 'integer', Rule::exists('proveedores', 'id_proveedor')],
+                'fecha_compra' => ['sometimes', 'required', 'date'],
+                'observaciones' => ['sometimes', 'nullable', 'string'],
+                'detalles' => ['sometimes', 'required', 'array', 'min:1'],
+                'detalles.*.id_producto' => ['required_with:detalles', 'integer', 'distinct', Rule::exists('productos', 'id_producto')],
+                'detalles.*.cantidad' => ['required_with:detalles', 'integer', 'min:1'],
+                'detalles.*.precio_unitario' => ['required_with:detalles', 'numeric', 'min:0'],
             ],
             [
                 'motivo.required' => 'Debe indicar el motivo de la corrección.',
@@ -467,6 +427,7 @@ class CompraController extends Controller
                 ];
             }
 
+            // Armamos un arreglo con los datos viejos para la auditoría
             $datosAnteriores = [
                 'id_proveedor' => $compra->id_proveedor,
                 'fecha_compra' => $compra->fecha_compra,
@@ -487,6 +448,7 @@ class CompraController extends Controller
                 )->values()->all(),
             ];
 
+            // Preparamos los nuevos detalles que ingresaron en la petición
             $detallesNuevos = $datos['detalles']
                 ?? $detallesAnteriores->map(
                     function ($detalle) {
@@ -519,12 +481,9 @@ class CompraController extends Controller
 
             unset($detalle);
 
+            // Recalculamos montos con la nueva data
             $subtotalCompra = round($subtotalCompra, 2);
-
-            // Recalcula el IVA según el nuevo subtotal.
             $impuesto = round($subtotalCompra * 0.15, 2);
-
-            // Recalcula el total de la compra.
             $totalCompra = round($subtotalCompra + $impuesto, 2);
 
             $datosNuevos = [
@@ -550,6 +509,7 @@ class CompraController extends Controller
                 ),
             ];
 
+            // Guardamos el registro en la tabla HistorialCompra (Auditoría de cambios)
             HistorialCompra::create([
                 'id_compra' => $compra->id_compra,
                 'id_usuario' => $usuario->id_usuario,
@@ -576,6 +536,7 @@ class CompraController extends Controller
 
             sort($idsProductos);
 
+            // Calculamos el cambio exacto (diferencia) para ajustar el inventario de cada producto
             foreach ($idsProductos as $idProducto) {
                 $producto = Producto::where('id_producto', $idProducto)
                     ->lockForUpdate()
@@ -589,12 +550,13 @@ class CompraController extends Controller
 
                 $cantidadAnterior = $cantidadesAnteriores[$idProducto] ?? 0;
                 $cantidadNueva = $cantidadesNuevas[$idProducto] ?? 0;
-                $diferencia = $cantidadNueva - $cantidadAnterior;
+                $diferencia = $cantidadNueva - $cantidadAnterior; // Ejemplo: Si antes eran 10 y ahora son 12, diferencia = +2. Si bajó a 8, diferencia = -2.
 
                 if ($diferencia !== 0) {
                     $existenciaAnterior = (int) $producto->existencia;
                     $existenciaNueva = $existenciaAnterior + $diferencia;
 
+                    // Validación estricta: No podemos permitir que el stock quede en números negativos
                     if ($existenciaNueva < 0) {
                         throw ValidationException::withMessages([
                             'detalles' => 'La corrección dejaría el inventario con existencias negativas.',
@@ -604,6 +566,7 @@ class CompraController extends Controller
                     $producto->existencia = $existenciaNueva;
                     $producto->save();
 
+                    // Registramos si fue Entrada o Salida por ajuste de corrección
                     MovimientoInventario::create([
                         'id_producto' => $producto->id_producto,
                         'id_usuario' => $usuario->id_usuario,
@@ -617,6 +580,7 @@ class CompraController extends Controller
                 }
             }
 
+            // Actualizamos la cabecera de la compra con los datos nuevos
             if (array_key_exists('id_proveedor', $datos)) {
                 $compra->id_proveedor = $datos['id_proveedor'];
             }
@@ -632,6 +596,7 @@ class CompraController extends Controller
             $compra->total = $totalCompra;
             $compra->save();
 
+            // Borramos los detalles viejos y creamos los nuevos detalles corregidos
             DetalleCompra::where('id_compra', $compra->id_compra)->delete();
 
             foreach ($detallesNuevos as $detalle) {

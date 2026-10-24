@@ -5,6 +5,7 @@ use App\Http\Controllers\Api\CategoriaController;
 use App\Http\Controllers\Api\ClienteController;
 use App\Http\Controllers\Api\CompatibilidadProductoController;
 use App\Http\Controllers\Api\CompraController;
+use App\Http\Controllers\Api\DashboardController;
 use App\Http\Controllers\Api\FacturaController;
 use App\Http\Controllers\Api\HistorialCompraController;
 use App\Http\Controllers\Api\HistorialVentaController;
@@ -322,6 +323,9 @@ Route::put('/facturas/anular/{id}', [FacturaController::class, 'anular'])
 | 15. Reportes y Consultas Consolidadas
 |--------------------------------------------------------------------------
 */
+
+Route::get('/dashboard/resumen', [DashboardController::class, 'resumen'])
+    ->middleware(['auth:sanctum', 'estado.usuario', 'rol:Administrador,Operador,Consultor']);
 
 Route::get('/reportes/inventario/actual', [ReporteController::class, 'inventarioActual'])
     ->middleware(['auth:sanctum', 'estado.usuario', 'rol:Administrador,Operador,Consultor']);
