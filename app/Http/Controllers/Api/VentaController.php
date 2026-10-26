@@ -24,6 +24,7 @@ class VentaController extends Controller
             'detalles.producto:id_producto,codigo_producto,nombre_producto',
         ])
             ->orderByDesc('fecha_venta')
+            ->orderByDesc('id_venta')
             ->get();
 
         return response()->json([
@@ -188,7 +189,7 @@ class VentaController extends Controller
             ], 500);
         }
     }
-    
+
     /**
      * Corrige una venta confirmada, recalcula importes, ajusta inventario y registra el historial.
      */

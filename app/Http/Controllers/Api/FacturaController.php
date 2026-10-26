@@ -22,6 +22,7 @@ class FacturaController extends Controller
             'venta.usuario:id_usuario,nombre_completo,nombre_usuario',
         ])
             ->orderByDesc('fecha_emision')
+            ->orderByDesc('id_factura')
             ->get();
 
         return response()->json([

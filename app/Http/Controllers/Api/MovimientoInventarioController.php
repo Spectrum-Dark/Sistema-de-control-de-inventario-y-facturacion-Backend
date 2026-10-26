@@ -19,6 +19,7 @@ class MovimientoInventarioController extends Controller
             'compra:id_compra,numero_compra',
         ])
             ->orderByDesc('fecha_movimiento')
+            ->orderByDesc('id_movimiento')
             ->get();
 
         return response()->json([

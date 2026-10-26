@@ -32,6 +32,7 @@ class CompraController extends Controller
             'usuario:id_usuario,nombre_completo,nombre_usuario',
             'detalles.producto:id_producto,codigo_producto,nombre_producto',
         ])
+            ->orderByDesc('fecha_compra')
             ->orderByDesc('id_compra')
             ->get();
 
