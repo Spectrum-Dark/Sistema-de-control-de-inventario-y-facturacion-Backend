@@ -197,6 +197,7 @@ class VentaController extends Controller
     {
         $validator = Validator::make($request->all(), [
             'motivo' => 'required|string|min:5',
+            'id_cliente' => 'sometimes|required|exists:clientes,id_cliente',
             'observaciones' => 'nullable|string',
             'detalles' => 'required|array|min:1',
             'detalles.*.id_producto' => 'required|exists:productos,id_producto',
@@ -319,6 +320,7 @@ class VentaController extends Controller
 
                 // Actualizar cabecera de la venta
                 $venta->update([
+                    'id_cliente' => $request->input('id_cliente', $venta->id_cliente),
                     'subtotal' => $nuevoSubtotal,
                     'impuesto' => $nuevoImpuesto,
                     'total' => $nuevoTotal,
